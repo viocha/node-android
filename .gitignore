@@ -1,0 +1,38 @@
+# Build outputs
+dist/
+.work/
+.cache/
+
+# Runtime state
+.state/
+logs/
+
+# Temporary editor/system files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Example app local build state
+**/.gradle/
+**/build/
+!scripts/build/
+!scripts/build/**
+**/local.properties
+**/.cxx/
+**/.externalNativeBuild/
+**/.idea/
+**/.kotlin/
+*.iml
+
+# Example runtime binaries copied in before APK builds
+example/android-verify/app/src/main/jniLibs/arm64-v8a/libnode.so
+example/android-verify/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+example/android-nextjs-shell/app/src/main/jniLibs/arm64-v8a/libnode.so
+example/android-nextjs-shell/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+example/android-nextjs-shell/app/src/main/assets/nextjs-app.zip
+example/android-nextjs-shell/app/src/main/assets/nextjs-app.version
+example/android-nextjs-shell/.bundle/
+example/android-nextjs-shell/next-app/node_modules/
+example/android-nextjs-shell/next-app/.next/
