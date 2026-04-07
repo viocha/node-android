@@ -36,7 +36,7 @@ Optional environment variables:
 
 Examples:
   ./scripts/release/release-github.sh
-  TAG=v24.14.1-android-arm64-api32-full-icu ./scripts/release/release-github.sh
+  TAG=v1.0.1 TITLE='node-android v1.0.1' ./scripts/release/release-github.sh
   DRAFT=1 GENERATE_NOTES=1 ./scripts/release/release-github.sh dist/node-v24.14.1-arm64-v8a-api32-full-icu
 EOF
 }

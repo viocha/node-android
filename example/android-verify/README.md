@@ -29,25 +29,36 @@ com.viocha.nodeverify
 
 ## Build prerequisites
 
-This example expects the repository's Android `libnode.so` to already exist at:
+This example does not require a local `libnode.so` build.
+The helper script resolves the latest core release tag and downloads:
+
+- `node-v24.14.1-android-arm64-v8a-api32-full-icu-libnode.so`
+- `android-arm64-v8a-libc++_shared.so`
+- `node-v24.14.1-headers.tar.gz`
+
+from:
 
 ```text
-dist/node-v24.14.1-arm64-v8a-api32-full-icu/libnode.so
+https://github.com/viocha/node-android/releases/tag/v1.0.0
 ```
 
-If you have not built it yet, from the repo root run:
+Downloaded assets are cached in:
+
+```text
+.cache/downloads/
+```
+
+The Node headers archive is extracted into:
+
+```text
+.work/node-v24.14.1/
+```
+
+You can pin a specific release tag if needed:
 
 ```bash
-./scripts/build/build-node-android.sh build
+RELEASE_TAG=v1.0.0 ./scripts/examples/build-android-verify-apk.sh
 ```
-
-The example source tree does not commit `libnode.so` or `libc++_shared.so`.
-The build helper copies:
-
-- `libnode.so` from `dist/`
-- `libc++_shared.so` from the configured Android NDK
-
-into the app's `jniLibs` directory before running Gradle.
 
 ## Build the example APK
 

@@ -31,7 +31,7 @@ android {
       cmake {
         cppFlags '-std=c++20', '-fexceptions', '-frtti'
         arguments '-DANDROID_STL=c++_shared',
-                  "-DNODE_SOURCE_DIR=${rootDir}/../../.work/node-v24.14.1-arm64-v8a-api32-full-icu"
+                  "-DNODE_HEADERS_DIR=${rootDir}/../../.work/node-v24.14.1"
       }
     }
   }

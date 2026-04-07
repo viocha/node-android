@@ -29,16 +29,17 @@ The app includes:
 
 ## Build prerequisites
 
-This example expects the repository's Android `libnode.so` to already exist at:
+This example does not require a local `libnode.so` build.
+The helper script resolves the latest core release tag and downloads:
+
+- `node-v24.14.1-android-arm64-v8a-api32-full-icu-libnode.so`
+- `android-arm64-v8a-libc++_shared.so`
+- `node-v24.14.1-headers.tar.gz`
+
+from:
 
 ```text
-dist/node-v24.14.1-arm64-v8a-api32-full-icu/libnode.so
-```
-
-If you have not built it yet:
-
-```bash
-./scripts/build/build-node-android.sh build
+https://github.com/viocha/node-android/releases/tag/v1.0.0
 ```
 
 ## Build the standalone Next.js asset bundle
@@ -90,9 +91,27 @@ From the repo root:
 This script:
 
 - builds the Next.js asset bundle
-- copies `libnode.so`
-- copies `libc++_shared.so`
+- downloads `libnode.so`
+- downloads `libc++_shared.so`
 - runs Gradle
+
+Downloaded assets are cached in:
+
+```text
+.cache/downloads/
+```
+
+The Node headers archive is extracted into:
+
+```text
+.work/node-v24.14.1/
+```
+
+You can pin a specific release tag if needed:
+
+```bash
+RELEASE_TAG=v1.0.0 ./scripts/examples/build-android-nextjs-shell-apk.sh
+```
 
 APK output:
 

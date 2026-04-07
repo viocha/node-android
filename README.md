@@ -162,24 +162,34 @@ example/android-nextjs-shell/app/build/outputs/apk/debug/app-debug.apk
 example/android-nextjs-shell/app/build/outputs/apk/release/app-release.apk
 ```
 
-Both helper scripts automatically copy:
+Both helper scripts automatically resolve the latest core release tag and download:
 
-- `libnode.so` from `dist/`
-- `libc++_shared.so` from the configured Android NDK
+- `node-v24.14.1-android-arm64-v8a-api32-full-icu-libnode.so`
+- `android-arm64-v8a-libc++_shared.so`
+- `node-v24.14.1-headers.tar.gz`
 
-into the target example app before running Gradle.
+from the configured GitHub release. Downloaded assets are cached in
+`.cache/downloads/`; the shared libraries are copied into the target example
+app and the headers archive is extracted into `.work/` before running Gradle.
 
 ## Release Assets
 
-The GitHub release for this repository ships:
+The core GitHub release for this repository ships:
 
-- `libnode.so`
-- `libc++_shared.so`
-- `build-info.txt`
-- the example `app-debug.apk`
+- `node-v24.14.1-android-arm64-v8a-api32-full-icu-libnode.so`
+- `android-arm64-v8a-libc++_shared.so`
+- `node-v24.14.1-android-arm64-v8a-api32-full-icu-build-info.txt`
+- `node-v24.14.1-headers.tar.gz`
 
 If you want to publish a new release from the current repo state:
 
 ```bash
 ./scripts/release/release-github.sh
+```
+
+You can override the resolved core release tag when needed:
+
+```bash
+RELEASE_TAG=v1.0.0 ./scripts/examples/build-android-verify-apk.sh
+RELEASE_TAG=v1.0.0 ./scripts/examples/build-android-nextjs-shell-apk.sh
 ```
