@@ -20,13 +20,13 @@ Usage:
 
 Default behavior:
   - picks the latest dist/* directory containing build-info.txt
-  - uploads libnode.so and build-info.txt to a GitHub Release
+  - uploads libnode, libc++_shared, build-info, and headers to a GitHub Release
   - derives tag/title/notes from build-info.txt
 
 Optional environment variables:
   DIST_DIR=/root/node-android/dist/node-v24.14.1-arm64-v8a-api32-full-icu
-  TAG=v24.14.1-android-arm64-v8a-api32-full-icu
-  TITLE='Node.js v24.14.1 Android arm64-v8a API 32 full-icu'
+  TAG=v1.0.0
+  TITLE='node-android v1.0.0'
   REPO=viocha/node-android
   TARGET=main
   DRAFT=1
@@ -90,20 +90,29 @@ load_build_info() {
 
 resolve_release_metadata() {
   if [[ -z "$TAG" ]]; then
-    TAG="${NODE_VERSION}-android-${ANDROID_ABI}-api${ANDROID_API}-${ICU_MODE}"
+    TAG="v1.0.0"
   fi
 
   if [[ -z "$TITLE" ]]; then
-    TITLE="Node.js ${NODE_VERSION} Android ${ANDROID_ABI} API ${ANDROID_API} ${ICU_MODE}"
+    TITLE="node-android ${TAG}"
   fi
 }
 
 ensure_assets() {
-  LIBNODE_PATH="${DIST_DIR}/libnode.so"
-  BUILD_INFO_PATH="${DIST_DIR}/build-info.txt"
+  local release_prefix headers_name
+
+  release_prefix="node-${NODE_VERSION#v}-android-${ANDROID_ABI}-api${ANDROID_API}-${ICU_MODE}"
+  headers_name="node-${NODE_VERSION#v}-headers.tar.gz"
+
+  LIBNODE_PATH="${DIST_ROOT}/${release_prefix}-libnode.so"
+  LIBCXX_PATH="${DIST_ROOT}/android-${ANDROID_ABI}-libc++_shared.so"
+  BUILD_INFO_PATH="${DIST_ROOT}/${release_prefix}-build-info.txt"
+  HEADERS_PATH="${DIST_ROOT}/${headers_name}"
 
   [[ -f "$LIBNODE_PATH" ]] || die "missing asset: $LIBNODE_PATH"
+  [[ -f "$LIBCXX_PATH" ]] || die "missing asset: $LIBCXX_PATH"
   [[ -f "$BUILD_INFO_PATH" ]] || die "missing asset: $BUILD_INFO_PATH"
+  [[ -f "$HEADERS_PATH" ]] || die "missing asset: $HEADERS_PATH"
 }
 
 ensure_gh_ready() {
@@ -138,8 +147,10 @@ Git commit: ${commit_sha}
 Repository: ${repo_url}
 
 Included assets:
-- libnode.so
-- build-info.txt
+- $(basename "$LIBNODE_PATH")
+- $(basename "$LIBCXX_PATH")
+- $(basename "$BUILD_INFO_PATH")
+- $(basename "$HEADERS_PATH")
 EOF
 
   RELEASE_NOTES_FILE="$tmp_file"
@@ -172,8 +183,10 @@ create_release() {
   fi
 
   cmd+=(
-    "${LIBNODE_PATH}#libnode.so"
-    "${BUILD_INFO_PATH}#build-info.txt"
+    "$LIBNODE_PATH"
+    "$LIBCXX_PATH"
+    "$BUILD_INFO_PATH"
+    "$HEADERS_PATH"
   )
 
   log "dist dir   : $DIST_DIR"
