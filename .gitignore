@@ -36,3 +36,5 @@ example/android-nextjs-shell/app/src/main/assets/nextjs-app.version
 example/android-nextjs-shell/.bundle/
 example/android-nextjs-shell/next-app/node_modules/
 example/android-nextjs-shell/next-app/.next/
+
+tmp/
