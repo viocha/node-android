@@ -33,7 +33,7 @@ using v8::Value;
 namespace {
 
 constexpr const char* kTag = "NextShell";
-constexpr const char* kPublicOrigin = "http://focusboard.invalid/";
+constexpr const char* kPublicOrigin = "http://localhost/";
 
 std::mutex g_node_mutex;
 bool g_process_initialized = false;
@@ -292,7 +292,7 @@ bool HealthcheckReady(int port) {
 
 bool ProxyHealthcheckReady(int proxy_port) {
   if (proxy_port <= 0) return false;
-  const std::string raw = HttpGet("127.0.0.1", proxy_port, "/api/health", "focusboard.invalid");
+  const std::string raw = HttpGet("127.0.0.1", proxy_port, "/api/health", "localhost");
   return raw.find("200") != std::string::npos && raw.find("\"ok\":true") != std::string::npos;
 }
 
@@ -312,7 +312,7 @@ const serverEntry = path.join(appDir, 'server.js');
 const appRequire = createRequire(serverEntry);
 const nextPort = Number('__NEXT_PORT__');
 const proxyPort = Number('__PROXY_PORT__');
-const publicHost = 'focusboard.invalid';
+const publicHost = 'localhost';
 
 const reportError = (error) => {
   try {

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FocusBoard</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(255, 181, 120, 0.18), transparent 24%),
+          radial-gradient(circle at top right, rgba(255, 228, 204, 0.66), transparent 30%),
+          linear-gradient(180deg, #fbf7f1 0%, #f4ede3 55%, #efe5da 100%);
+        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        color: #7a6d61;
+      }
+
+      .loading {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading">Loading…</div>
+    <script>
+      window.NextShellBootstrapUi = {
+        showLoading(text = "Loading…") {
+          const node = document.querySelector(".loading");
+          if (!node) return;
+          node.textContent = text;
+        },
+        showError(text) {
+          const node = document.querySelector(".loading");
+          if (!node) return;
+          node.textContent = text;
+          node.style.color = "#7f1d1d";
+          node.style.letterSpacing = "0";
+          node.style.whiteSpace = "pre-wrap";
+          node.style.maxWidth = "min(84vw, 720px)";
+        },
+        openApp(url) {
+          if (!url) return;
+          window.location.replace(url);
+        },
+      };
+    </script>
+  </body>
+</html>

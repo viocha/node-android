@@ -21,6 +21,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
@@ -128,6 +136,7 @@ export default function TasksClient({
   const [details, setDetails] = useState("")
   const [priority, setPriority] = useState<TaskPriority>("medium")
   const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [message, setMessage] = useState("Everything stays on-device and is saved by the embedded backend.")
@@ -157,6 +166,7 @@ export default function TasksClient({
       setTitle("")
       setDetails("")
       setPriority("medium")
+      setCreateDialogOpen(false)
       setMessage("Task created.")
     } catch (error) {
       setMessage((error as Error).message)
@@ -258,118 +268,96 @@ export default function TasksClient({
     }
   }
 
-  const focusTasks = [...grouped.in_progress, ...grouped.backlog].slice(0, 3)
+  const createTaskForm = (
+    <form className="space-y-4" onSubmit={handleCreate}>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="task-title">
+          Title
+        </label>
+        <Input
+          id="task-title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Ship Android Next.js shell"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="task-details">
+          Details
+        </label>
+        <Textarea
+          id="task-details"
+          rows={5}
+          value={details}
+          onChange={(event) => setDetails(event.target.value)}
+          placeholder="Write the smallest next step that keeps momentum."
+        />
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Priority</p>
+        <div className="flex flex-wrap gap-2">
+          {(["low", "medium", "high"] as TaskPriority[]).map((option) => (
+            <Button
+              key={option}
+              type="button"
+              variant={priority === option ? "default" : "outline"}
+              onClick={() => setPriority(option)}
+            >
+              {priorityCopy[option]}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={pendingAction === "create" || title.trim().length === 0}
+        >
+          {pendingAction === "create" ? <LoaderCircle className="animate-spin" /> : <Plus />}
+          Create task
+        </Button>
+      </div>
+    </form>
+  )
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <div className="grid gap-4">
-        <Card className="border-border/70 bg-white/88 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-3xl tracking-[-0.06em]">FocusBoard</CardTitle>
-            <CardDescription className="max-w-md leading-6">
-              A compact task workspace that opens instantly inside the Android shell and persists
-              everything locally through the bundled Next.js backend.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <SummaryTile label="Open" value={String(summary.backlog)} tone="text-foreground" />
-            <SummaryTile label="Doing" value={String(summary.inProgress)} tone="text-primary" />
-            <SummaryTile label="Done" value={String(summary.done)} tone="text-emerald-700" />
-          </CardContent>
-        </Card>
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <Card className="shrink-0 border-border/70 bg-white/88 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-3xl tracking-[-0.06em]">FocusBoard</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-3 gap-3">
+          <SummaryTile label="Open" value={String(summary.backlog)} tone="text-amber-700" />
+          <SummaryTile label="Doing" value={String(summary.inProgress)} tone="text-sky-700" />
+          <SummaryTile label="Done" value={String(summary.done)} tone="text-emerald-700" />
+        </CardContent>
+      </Card>
 
-        <Card className="border-border/70 bg-white/88 shadow-sm">
-          <CardHeader>
-            <CardTitle>New task</CardTitle>
-            <CardDescription>Add the next thing that matters, then move it forward with one tap.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleCreate}>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="task-title">
-                  Title
-                </label>
-                <Input
-                  id="task-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Ship Android Next.js shell"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="task-details">
-                  Details
-                </label>
-                <Textarea
-                  id="task-details"
-                  rows={5}
-                  value={details}
-                  onChange={(event) => setDetails(event.target.value)}
-                  placeholder="Write the smallest next step that keeps momentum."
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Priority</p>
-                <div className="flex flex-wrap gap-2">
-                  {(["low", "medium", "high"] as TaskPriority[]).map((option) => (
-                    <Button
-                      key={option}
-                      type="button"
-                      variant={priority === option ? "default" : "outline"}
-                      onClick={() => setPriority(option)}
-                    >
-                      {priorityCopy[option]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <Button
-                type="submit"
-                size="lg"
-                disabled={pendingAction === "create" || title.trim().length === 0}
-              >
-                {pendingAction === "create" ? <LoaderCircle className="animate-spin" /> : <Plus />}
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border-border/70 bg-white/88 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>Task board</CardTitle>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="ml-auto">
+                <Plus />
                 Create task
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70 bg-white/88 shadow-sm">
-          <CardHeader>
-            <CardTitle>Today’s focus</CardTitle>
-            <CardDescription>The three tasks you’re most likely to touch next.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {focusTasks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/70 bg-muted/40 p-5 text-sm text-muted-foreground">
-                No active tasks yet. Create one above to start the board.
-              </div>
-            ) : (
-              focusTasks.map((task) => (
-                <div key={task.id} className="rounded-xl border border-border/70 bg-background/80 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium">{task.title}</p>
-                    <Badge variant="outline">{priorityCopy[task.priority]}</Badge>
-                  </div>
-                  {task.details ? (
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.details}</p>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-border/70 bg-white/88 shadow-sm">
-        <CardHeader>
-          <CardTitle>Task board</CardTitle>
-          <CardDescription>Move work from backlog to done without leaving the page.</CardDescription>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>New task</DialogTitle>
+                <DialogDescription>
+                  Add the next thing that matters, then move it forward with one tap.
+                </DialogDescription>
+              </DialogHeader>
+              {createTaskForm}
+            </DialogContent>
+            </Dialog>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Tabs defaultValue="all" className="gap-4">
-            <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none p-0">
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+          <Tabs defaultValue="all" className="flex min-h-0 flex-1 flex-col gap-4">
+            <TabsList className="shrink-0">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="backlog">Backlog</TabsTrigger>
               <TabsTrigger value="in_progress">In Progress</TabsTrigger>
@@ -381,8 +369,8 @@ export default function TasksClient({
                 tab === "all" ? tasks : grouped[tab]
 
               return (
-                <TabsContent key={tab} value={tab}>
-                  <div className="space-y-3">
+                <TabsContent key={tab} value={tab} className="min-h-0 flex-1 overflow-hidden">
+                  <div className="h-full space-y-3 overflow-y-auto pr-1">
                     {visibleTasks.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-border/70 bg-muted/40 p-6 text-sm text-muted-foreground">
                         Nothing here yet.
@@ -555,7 +543,6 @@ export default function TasksClient({
               )
             })}
           </Tabs>
-          <p className="text-sm text-muted-foreground">{message}</p>
         </CardContent>
       </Card>
     </div>

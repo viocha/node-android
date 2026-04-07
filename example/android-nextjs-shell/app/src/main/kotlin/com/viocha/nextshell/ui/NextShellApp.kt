@@ -1,33 +1,26 @@
 package com.viocha.nextshell.ui
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +30,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,10 +42,14 @@ import com.viocha.nextshell.runtime.NextBundleInstaller
 import com.viocha.nextshell.runtime.parseLaunchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.nio.charset.StandardCharsets
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-private const val PrivateOrigin = "http://focusboard.invalid/"
+private const val PrivateOrigin = "http://localhost/"
+private const val BootstrapBaseUrl = "${PrivateOrigin}__bootstrap_loading__"
+private const val BootstrapAssetName = "bootstrap-loading.html"
 private const val ShellTag = "NextShell"
 private const val LoadingMessage = "Loading…"
 private const val WebSurfaceColor = 0xFFF8F0E5.toInt()
@@ -70,7 +65,13 @@ fun NextShellApp(
     startNextServer: (String) -> String
 ) {
     val context = LocalContext.current
+    val bootstrapHtml = remember {
+        context.assets.open(BootstrapAssetName).use {
+            String(it.readBytes(), StandardCharsets.UTF_8)
+        }
+    }
     var launchNonce by rememberSaveable { mutableIntStateOf(0) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     val shellState by produceState<ShellUiState>(
         initialValue = ShellUiState.Loading(LoadingMessage),
@@ -129,60 +130,61 @@ fun NextShellApp(
         }
     }
 
-    val backgroundBrush = remember {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFFFFF7EE),
-                Color(0xFFF8F0E5),
-                Color(0xFFF1E6DA)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundBrush)
-    ) {
+    LaunchedEffect(webViewRef, shellState) {
+        val webView = webViewRef ?: return@LaunchedEffect
         when (val state = shellState) {
-            is ShellUiState.Loading -> LoadingPanel(state.message)
-            is ShellUiState.Error -> ErrorPanel(
-                message = state.message,
-                onRetry = { launchNonce += 1 }
-            )
-
-            is ShellUiState.Ready -> WebAppPanel(url = state.url)
-        }
-    }
-}
-
-@Composable
-private fun LoadingPanel(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            tonalElevation = 2.dp,
-            shadowElevation = 2.dp,
-            shape = MaterialTheme.shapes.extraLarge,
-            modifier = Modifier.padding(22.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp)
-            ) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.5.dp,
-                    modifier = Modifier.padding(end = 14.dp)
-                )
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+            is ShellUiState.Loading -> {
+                loadBootstrapPage(webView, bootstrapHtml)
+                updateBootstrapUi(
+                    webView,
+                    "window.NextShellBootstrapUi?.showLoading(${JSONObject.quote(state.message)})"
                 )
             }
+
+            is ShellUiState.Ready -> {
+                updateBootstrapUi(
+                    webView,
+                    "window.NextShellBootstrapUi?.openApp(${JSONObject.quote(state.url)})"
+                )
+            }
+
+            is ShellUiState.Error -> {
+                loadBootstrapPage(webView, bootstrapHtml)
+                updateBootstrapUi(
+                    webView,
+                    "window.NextShellBootstrapUi?.showError(${JSONObject.quote(state.message)})"
+                )
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { androidContext ->
+                WebView(androidContext).apply {
+                    webViewRef = this
+                    configureWebView(this)
+                    loadBootstrapPage(this, bootstrapHtml)
+                }
+            },
+            onRelease = { view ->
+                if (webViewRef === view) {
+                    webViewRef = null
+                }
+                view.stopLoading()
+                view.loadUrl("about:blank")
+                view.clearHistory()
+                view.removeAllViews()
+                view.destroy()
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (shellState is ShellUiState.Error) {
+            ErrorPanel(
+                message = (shellState as ShellUiState.Error).message,
+                onRetry = { launchNonce += 1 },
+            )
         }
     }
 }
@@ -211,12 +213,6 @@ private fun ErrorPanel(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = "This panel only appears when the embedded app fails to load.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
                 SelectionContainer {
                     Text(
                         text = message,
@@ -244,7 +240,14 @@ private suspend fun applyWebViewProxyOverride(
         suspendCoroutine { continuation ->
             ProxyController.getInstance().setProxyOverride(
                 ProxyConfig.Builder()
-                    .addProxyRule(proxyRule, ProxyConfig.MATCH_HTTP)
+                    .addProxyRule(proxyRule)
+                    .removeImplicitRules()
+                    .addBypassRule("localhost")
+                    .apply {
+                        if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE_REVERSE_BYPASS)) {
+                            setReverseBypassEnabled(true)
+                        }
+                    }
                     .build(),
                 ContextCompat.getMainExecutor(context)
             ) {
@@ -264,112 +267,55 @@ private fun clearWebViewProxyOverride(
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-@Composable
-private fun WebAppPanel(
-    url: String
+private fun configureWebView(
+    webView: WebView
 ) {
-    var webError by remember { mutableStateOf<String?>(null) }
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var pageCommitted by remember(url) { mutableStateOf(false) }
-    val systemBarsPadding = WindowInsets.statusBars.asPaddingValues()
-    val navigationPadding = WindowInsets.navigationBars.asPaddingValues()
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { context ->
-                WebView(context).apply {
-                    webViewRef = this
-                    setBackgroundColor(WebSurfaceColor)
-                    alpha = 0f
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.loadsImagesAutomatically = true
-                    settings.cacheMode = WebSettings.LOAD_DEFAULT
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            webError = null
-                            pageCommitted = false
-                            view?.alpha = 0f
-                        }
-
-                        override fun onPageCommitVisible(view: WebView?, url: String?) {
-                            pageCommitted = true
-                            view?.animate()?.alpha(1f)?.setDuration(120L)?.start()
-                        }
-
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?
-                        ) {
-                            if (request?.isForMainFrame == true) {
-                                Log.e(
-                                    ShellTag,
-                                    "Main frame load failed for ${request.url}: ${error?.errorCode} ${error?.description}"
-                                )
-                                webError = error?.description?.toString() ?: "Unknown WebView error"
-                            }
-                        }
-                    }
-                    loadUrl(url)
-                }
-            },
-            update = { view ->
-                if (view.url != url) {
-                    view.loadUrl(url)
-                }
-            },
-            onRelease = { view ->
-                if (webViewRef === view) {
-                    webViewRef = null
-                }
-                view.stopLoading()
-                view.loadUrl("about:blank")
-                view.clearHistory()
-                view.removeAllViews()
-                view.destroy()
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = systemBarsPadding.calculateTopPadding())
-                .padding(bottom = navigationPadding.calculateBottomPadding())
-        )
-
-        if (!pageCommitted && webError == null) {
-            LoadingPanel(message = LoadingMessage)
-        }
-
-        if (webError != null) {
-            Surface(
-                tonalElevation = 2.dp,
-                shape = MaterialTheme.shapes.large,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = systemBarsPadding.calculateTopPadding())
-                    .padding(16.dp)
+    webView.setBackgroundColor(WebSurfaceColor)
+    webView.isVerticalScrollBarEnabled = false
+    webView.isHorizontalScrollBarEnabled = false
+    webView.settings.apply {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        loadsImagesAutomatically = true
+        cacheMode = WebSettings.LOAD_DEFAULT
+        allowFileAccess = false
+        allowContentAccess = false
+    }
+    webView.webViewClient =
+        object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Page load failed",
-                        fontWeight = FontWeight.SemiBold
+                if (request?.isForMainFrame == true) {
+                    Log.e(
+                        ShellTag,
+                        "Main frame load failed for ${request.url}: ${error?.errorCode} ${error?.description}"
                     )
-                    SelectionContainer {
-                        Text(
-                            text = webError ?: "",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 10.dp)
-                        )
-                    }
-                    Button(
-                        onClick = { webViewRef?.reload() },
-                        modifier = Modifier.padding(top = 14.dp)
-                    ) {
-                        Text("Try again")
-                    }
                 }
             }
         }
+}
+
+private fun loadBootstrapPage(
+    webView: WebView,
+    bootstrapHtml: String
+) {
+    webView.loadDataWithBaseURL(
+        BootstrapBaseUrl,
+        bootstrapHtml,
+        "text/html",
+        "UTF-8",
+        null,
+    )
+}
+
+private fun updateBootstrapUi(
+    webView: WebView,
+    script: String
+) {
+    webView.post {
+        webView.evaluateJavascript(script, null)
     }
 }
