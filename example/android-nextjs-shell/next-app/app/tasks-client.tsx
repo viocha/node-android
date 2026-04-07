@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
+import { type FormEvent, useEffect, useMemo, useState } from "react"
 import {
   CheckCircle2,
   CircleDashed,
@@ -33,6 +33,17 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import type { Task, TaskPriority, TaskStatus, TaskSummary } from "@/lib/store"
+
+declare global {
+  interface Window {
+    NextShellAndroid?: {
+      setDialogState?: (kind: string, open: boolean) => void
+    }
+    NextShellUiBridge?: {
+      closeTopDialog?: () => void
+    }
+  }
+}
 
 type TasksResponse = {
   ok: boolean
@@ -130,8 +141,6 @@ export default function TasksClient({
   initialTasks,
   initialSummary,
 }: TasksClientProps) {
-  const createDialogHistoryEntry = useRef(false)
-  const closingCreateDialogFromPopstate = useRef(false)
   const [tasks, setTasks] = useState(initialTasks)
   const [summary, setSummary] = useState(initialSummary)
   const [title, setTitle] = useState("")
@@ -142,6 +151,7 @@ export default function TasksClient({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [message, setMessage] = useState("Everything stays on-device and is saved by the embedded backend.")
+  const editDialogOpen = editingTaskId !== null && editDraft !== null
 
   const grouped = useMemo(() => {
     return {
@@ -152,36 +162,31 @@ export default function TasksClient({
   }, [tasks])
 
   useEffect(() => {
-    if (!createDialogOpen) return
-
-    window.history.pushState({ nextShellDialog: "create-task" }, "")
-    createDialogHistoryEntry.current = true
-
-    const handlePopState = () => {
-      if (!createDialogOpen) return
-      closingCreateDialogFromPopstate.current = true
-      setCreateDialogOpen(false)
-    }
-
-    window.addEventListener("popstate", handlePopState)
-    return () => {
-      window.removeEventListener("popstate", handlePopState)
-    }
+    window.NextShellAndroid?.setDialogState?.("create", createDialogOpen)
   }, [createDialogOpen])
 
   useEffect(() => {
-    if (createDialogOpen) return
-    if (!createDialogHistoryEntry.current) return
+    window.NextShellAndroid?.setDialogState?.("edit", editDialogOpen)
+  }, [editDialogOpen])
 
-    if (closingCreateDialogFromPopstate.current) {
-      closingCreateDialogFromPopstate.current = false
-      createDialogHistoryEntry.current = false
-      return
+  useEffect(() => {
+    window.NextShellUiBridge = {
+      closeTopDialog() {
+        if (editDialogOpen) {
+          cancelEdit()
+          return
+        }
+
+        if (createDialogOpen) {
+          setCreateDialogOpen(false)
+        }
+      },
     }
 
-    createDialogHistoryEntry.current = false
-    window.history.back()
-  }, [createDialogOpen])
+    return () => {
+      delete window.NextShellUiBridge
+    }
+  }, [createDialogOpen, editDialogOpen])
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -355,6 +360,105 @@ export default function TasksClient({
     </form>
   )
 
+  const editTaskForm =
+    editDraft ? (
+      <form className="space-y-4" onSubmit={handleSaveEdit}>
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="edit-task-title">
+            Title
+          </label>
+          <Input
+            id="edit-task-title"
+            value={editDraft.title}
+            onChange={(event) =>
+              setEditDraft({
+                ...editDraft,
+                title: event.target.value,
+              })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="edit-task-details">
+            Details
+          </label>
+          <Textarea
+            id="edit-task-details"
+            rows={5}
+            value={editDraft.details}
+            onChange={(event) =>
+              setEditDraft({
+                ...editDraft,
+                details: event.target.value,
+              })
+            }
+          />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Priority</p>
+            <div className="flex flex-wrap gap-2">
+              {(["low", "medium", "high"] as TaskPriority[]).map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  variant={editDraft.priority === option ? "default" : "outline"}
+                  onClick={() =>
+                    setEditDraft({
+                      ...editDraft,
+                      priority: option,
+                    })
+                  }
+                >
+                  {priorityCopy[option]}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Status</p>
+            <div className="flex flex-wrap gap-2">
+              {(["backlog", "in_progress", "done"] as TaskStatus[]).map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  variant={editDraft.status === option ? "default" : "outline"}
+                  onClick={() =>
+                    setEditDraft({
+                      ...editDraft,
+                      status: option,
+                    })
+                  }
+                >
+                  {statusCopy[option]}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={cancelEdit}>
+            <X />
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={
+              pendingAction === `edit:${editDraft.id}` ||
+              editDraft.title.trim().length === 0
+            }
+          >
+            {pendingAction === `edit:${editDraft.id}` ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <PencilLine />
+            )}
+            Save changes
+          </Button>
+        </div>
+      </form>
+    ) : null
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <Card className="shrink-0 border-border/70 bg-white/88 shadow-sm">
@@ -387,7 +491,18 @@ export default function TasksClient({
               </DialogHeader>
               {createTaskForm}
             </DialogContent>
-            </Dialog>
+          </Dialog>
+          <Dialog open={editDialogOpen} onOpenChange={(open) => !open && cancelEdit()}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Edit task</DialogTitle>
+                <DialogDescription>
+                  Update the task details, status, and priority without leaving the board.
+                </DialogDescription>
+              </DialogHeader>
+              {editTaskForm}
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
           <Tabs defaultValue="all" className="flex min-h-0 flex-1 flex-col gap-4">
@@ -412,7 +527,6 @@ export default function TasksClient({
                     ) : (
                       visibleTasks.map((task) => {
                         const ActionIcon = actionIcon(task.status)
-                        const isEditing = editingTaskId === task.id && editDraft?.id === task.id
                         return (
                           <article
                             key={task.id}
@@ -473,101 +587,6 @@ export default function TasksClient({
                                 </Button>
                               </div>
                             </div>
-
-                            {isEditing && editDraft ? (
-                              <form className="mt-4 space-y-4 rounded-xl border border-border/70 bg-white/85 p-4" onSubmit={handleSaveEdit}>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium" htmlFor={`edit-title-${task.id}`}>
-                                    Title
-                                  </label>
-                                  <Input
-                                    id={`edit-title-${task.id}`}
-                                    value={editDraft.title}
-                                    onChange={(event) =>
-                                      setEditDraft({
-                                        ...editDraft,
-                                        title: event.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium" htmlFor={`edit-details-${task.id}`}>
-                                    Details
-                                  </label>
-                                  <Textarea
-                                    id={`edit-details-${task.id}`}
-                                    rows={4}
-                                    value={editDraft.details}
-                                    onChange={(event) =>
-                                      setEditDraft({
-                                        ...editDraft,
-                                        details: event.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="grid gap-4 md:grid-cols-2">
-                                  <div className="space-y-2">
-                                    <p className="text-sm font-medium">Priority</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {(["low", "medium", "high"] as TaskPriority[]).map((option) => (
-                                        <Button
-                                          key={option}
-                                          type="button"
-                                          variant={editDraft.priority === option ? "default" : "outline"}
-                                          onClick={() =>
-                                            setEditDraft({
-                                              ...editDraft,
-                                              priority: option,
-                                            })
-                                          }
-                                        >
-                                          {priorityCopy[option]}
-                                        </Button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <p className="text-sm font-medium">Status</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {(["backlog", "in_progress", "done"] as TaskStatus[]).map((option) => (
-                                        <Button
-                                          key={option}
-                                          type="button"
-                                          variant={editDraft.status === option ? "default" : "outline"}
-                                          onClick={() =>
-                                            setEditDraft({
-                                              ...editDraft,
-                                              status: option,
-                                            })
-                                          }
-                                        >
-                                          {statusCopy[option]}
-                                        </Button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="submit"
-                                    disabled={pendingAction === `edit:${task.id}` || editDraft.title.trim().length === 0}
-                                  >
-                                    {pendingAction === `edit:${task.id}` ? (
-                                      <LoaderCircle className="animate-spin" />
-                                    ) : (
-                                      <PencilLine />
-                                    )}
-                                    Save changes
-                                  </Button>
-                                  <Button type="button" variant="outline" onClick={cancelEdit}>
-                                    <X />
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </form>
-                            ) : null}
                           </article>
                         )
                       })

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -45,6 +46,11 @@ class MainActivity : ComponentActivity() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private lateinit var bootstrapHtml: String
     private var webView: WebView? = null
+    private lateinit var backPressedCallback: OnBackPressedCallback
+    @Volatile
+    private var createDialogOpen = false
+    @Volatile
+    private var editDialogOpen = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         bootstrapHtml =
@@ -77,20 +83,19 @@ class MainActivity : ComponentActivity() {
         )
         startBootstrap()
 
-        onBackPressedDispatcher.addCallback(
-            this,
+        backPressedCallback =
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     val currentWebView = webView
-                    if (currentWebView != null && currentWebView.canGoBack()) {
-                        currentWebView.goBack()
+                    if (currentWebView != null) {
+                        dispatchBackPressToPage(currentWebView)
                         return
                     }
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                 }
-            },
-        )
+            }
+        onBackPressedDispatcher.addCallback(this, backPressedCallback)
     }
 
     override fun onDestroy() {
@@ -99,11 +104,6 @@ class MainActivity : ComponentActivity() {
         webView?.removeAllViews()
         webView?.destroy()
         webView = null
-    }
-
-    override fun onResume() {
-        super.onResume()
-        webView?.invalidate()
     }
 
     private fun configureWebView(webView: WebView) {
@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
             allowFileAccess = false
             allowContentAccess = false
         }
+        webView.addJavascriptInterface(NextShellBridge(), "NextShellAndroid")
         webView.webViewClient =
             object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -196,6 +197,49 @@ class MainActivity : ComponentActivity() {
     private fun updateBootstrapUi(script: String) {
         webView?.post {
             webView?.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchBackPressToPage(currentWebView: WebView) {
+        if (editDialogOpen || createDialogOpen) {
+            currentWebView.evaluateJavascript(
+                "window.NextShellUiBridge?.closeTopDialog?.();",
+                null,
+            )
+            return
+        }
+
+        currentWebView.evaluateJavascript(
+            """
+            (function () {
+              const event = new Event('nextshellbackbutton', { cancelable: true });
+              return window.dispatchEvent(event) === false ? 'handled' : 'unhandled';
+            })();
+            """.trimIndent(),
+        ) { result ->
+            if (result == "\"handled\"") {
+                return@evaluateJavascript
+            }
+
+            if (currentWebView.canGoBack()) {
+                currentWebView.goBack()
+                return@evaluateJavascript
+            }
+
+            runOnUiThread {
+                backPressedCallback.isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        }
+    }
+
+    private inner class NextShellBridge {
+        @JavascriptInterface
+        fun setDialogState(kind: String, open: Boolean) {
+            when (kind) {
+                "create" -> createDialogOpen = open
+                "edit" -> editDialogOpen = open
+            }
         }
     }
 }
