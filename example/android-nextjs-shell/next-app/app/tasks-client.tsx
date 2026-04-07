@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useMemo, useState } from "react"
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   CircleDashed,
@@ -130,6 +130,8 @@ export default function TasksClient({
   initialTasks,
   initialSummary,
 }: TasksClientProps) {
+  const createDialogHistoryEntry = useRef(false)
+  const closingCreateDialogFromPopstate = useRef(false)
   const [tasks, setTasks] = useState(initialTasks)
   const [summary, setSummary] = useState(initialSummary)
   const [title, setTitle] = useState("")
@@ -148,6 +150,38 @@ export default function TasksClient({
       done: tasks.filter((task) => task.status === "done"),
     }
   }, [tasks])
+
+  useEffect(() => {
+    if (!createDialogOpen) return
+
+    window.history.pushState({ nextShellDialog: "create-task" }, "")
+    createDialogHistoryEntry.current = true
+
+    const handlePopState = () => {
+      if (!createDialogOpen) return
+      closingCreateDialogFromPopstate.current = true
+      setCreateDialogOpen(false)
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [createDialogOpen])
+
+  useEffect(() => {
+    if (createDialogOpen) return
+    if (!createDialogHistoryEntry.current) return
+
+    if (closingCreateDialogFromPopstate.current) {
+      closingCreateDialogFromPopstate.current = false
+      createDialogHistoryEntry.current = false
+      return
+    }
+
+    createDialogHistoryEntry.current = false
+    window.history.back()
+  }, [createDialogOpen])
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
